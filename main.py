@@ -14,28 +14,23 @@ RETRY_DELAY = 5
 
 def ip_range_to_cidr(start_ip, end_ip):
     """
-    将 IP 地址范围转换为 CIDR 格式。
+    将 IP 地址范围转换为 CIDR 格式（优化版本）。
     """
     start = int(ipaddress.ip_address(start_ip))
     end = int(ipaddress.ip_address(end_ip))
 
     cidrs = []
-    while start <= end:
+    while end >= start:
         # 计算最大的可以合并的 prefixlen
-        prefixlen = 32
-        while prefixlen > 0:
-            try:
-                network = ipaddress.ip_network((start, prefixlen), strict=False)
-                if int(network.network_address) != start or int(network.broadcast_address) > end:
-                    prefixlen -= 1
-                    break
-                else:
-                    break
-            except ValueError:
-                prefixlen -= 1
+        max_prefixlen = 0
+        while True:
+            new_start = start | ((1 << (32 - max_prefixlen - 1)) - 1)
+            if new_start >= end:
                 break
-        cidrs.append(str(ipaddress.ip_network((start, prefixlen), strict=False)))
-        start += 2 ** (32 - prefixlen)
+            max_prefixlen += 1
+        network = ipaddress.ip_network((start, 32 - max_prefixlen), strict=False)
+        cidrs.append(str(network))
+        start += (1 << (32 - (32 - max_prefixlen)))
     return cidrs
 
 def is_valid_asn(as_number:str, asns:list[str]) ->bool:
