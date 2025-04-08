@@ -59,14 +59,18 @@ def get_china_ips_from_csv(csv_file):
             reader = csv.reader(f)
             next(reader, None)  # Skip header row
             for row in reader:
-                if len(row) < 7:
-                    continue
-                start_ip, end_ip, country,_,_,_,asn = row[0], row[1], row[2],row[3],row[4],row[5],row[6]
+                try:
+                    if len(row) < 7:
+                        continue
+                    start_ip, end_ip, country,_,_,_,asn = row[0], row[1], row[2],row[3],row[4],row[5],row[6]
 
-                if country == "CN" and is_valid_asn(asn,AS_NUMBERS):
-                    #Convert to CIDR
-                    cidrs = ip_range_to_cidr(start_ip, end_ip)
-                    china_ips.extend(cidrs)
+                    if country == "CN" and is_valid_asn(asn,AS_NUMBERS):
+                        #Convert to CIDR
+                        cidrs = ip_range_to_cidr(start_ip, end_ip)
+                        china_ips.extend(cidrs)
+                except Exception as e:
+                    print(f"Error processing row: {row}. Error: {e}") # 打印出错的行
+                    continue  # 忽略当前行，继续处理下一行
     except Exception as e:
         print(f"Error reading CSV file: {e}")
     return china_ips
