@@ -14,7 +14,7 @@ jobs:
   update-ips:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 授予写入仓库内容的权
+      contents: write  # 授予写入仓库内容的权限
     steps:
       - uses: actions/checkout@v3
 
@@ -26,10 +26,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests  # 安装 requests 库
-          # 如果你使用纯真 IP 库，也需要安装对应的 Python 库
-          # pip install qqwry
           pip install ipaddress  # 安装 ipaddress 库
+
+      - name: Download IPinfo database
+        run: |
+          # 使用 GitHub Secret 安全地下载 IPinfo 数据库
+          wget "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_TOKEN }}" -O ipinfo-country-asn.csv.gz
 
       - name: Run script
         run: python main.py
