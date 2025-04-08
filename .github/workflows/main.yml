@@ -40,6 +40,6 @@ jobs:
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add china_ips.txt
+          git add china_ips.txt ipinfo-country-asn.csv.gz # 增加数据库文件的提交
           git commit -m "Update China IPs" || echo "No changes to commit" # 防止没有修改时 commit 失败
           git push origin main
