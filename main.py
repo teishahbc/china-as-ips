@@ -13,7 +13,7 @@ import sys # Import sys for stderr and exit
 # AS9808: China Mobile
 # AS4812: China Telecom Backbone (CN2)
 # Add or remove ASNs as needed
-AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
+AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812", "AS56040"]
 
 OUTPUT_FILE = "china_ips.txt"
 COUNTRY_ASN_FILE = "country_asn.csv.gz" # Input gzipped CSV file from IPinfo
