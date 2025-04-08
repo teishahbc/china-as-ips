@@ -2,81 +2,111 @@ import datetime
 import ipaddress
 import csv
 import os
+import gzip
 
 AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
-IP2LOCATION_DB_PATH = "IP2LOCATION-LITE-DB1.IPV4.CSV"
+IPINFO_DB_PATH = "ipinfo-country-asn.csv.gz" # 修改成你下载的数据库文件名
 
-def get_as_ips(as_number):
+def get_as_ips_from_db(as_number, ip_country_asn_data):
     """
-    从 IP2Location 数据库中查找属于指定 AS 的 IP 地址范围。
-    注意：此实现需要你手动创建 AS 到 IP 地址范围的映射。
-    由于 IP2Location 数据库不直接包含 AS 信息，你需要自己维护一个映射表，
-    或者使用其他方法将 IP 地址范围映射到 AS 编号。
-
-    **重要：** 这个函数是一个占位符实现，你需要替换它，或者额外建立IP和AS的对应关系。
+    从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址。
     """
+    as_ips = []
+    for record in ip_country_asn_data:
+        if record["asn"] == as_number:
+            as_ips.append(record["ip_prefix"])
+    return as_ips
 
-    print(f"Fetching IPs for {as_number} using IP2Location - Placeholder implementation, replace with your logic!")
-    return [] # 你需要实现从 IP2Location 数据中获取与AS number 对应的IP段
 
-def is_china_ip(ip_address):
+def is_china_ip(ip_address, ip_country_asn_data):
     """
-    使用 IP2Location LITE 数据库判断 IP 地址是否属于中国大陆。
+    使用 IPinfo 数据库判断 IP 地址是否属于中国大陆。
     """
     try:
-        ip_num = int(ipaddress.ip_address(ip_address))  # 将 IP 地址转换为整数
+        ip_addr = ipaddress.ip_address(ip_address)
     except ValueError:
         print(f"Invalid IP address: {ip_address}")
         return False
 
-    try:
-        if not os.path.exists(IP2LOCATION_DB_PATH):
-            print(f"IP2Location database file not found at {IP2LOCATION_DB_PATH}. Using placeholder China IP check.")
-            ip = ipaddress.ip_address(ip_address)
-            #  提供一个简化的占位符实现
-            #  请用更可靠和授权的方式来判断 IP 归属地
-            if ip.subnet_of(ipaddress.ip_network('101.0.0.0/8')):
-                return True
-            elif ip.subnet_of(ipaddress.ip_network('58.0.0.0/8')):
-                return True
-            else:
-                return False
+    for record in ip_country_asn_data:
+        try:
+            network = ipaddress.ip_network(record["ip_prefix"])
+            if ip_addr in network:
+                return record["country_code"] == "CN"
+        except ValueError:
+            print(f"Invalid IP Prefix: {record['ip_prefix']}")
+            continue  # skip to the next record
+        except Exception as e:
+            print(f"Unexpected Error checking IP {ip_address} in Prefix {record['ip_prefix']}: {e}")
+            return False
+
+    print(f"No matching IP Prefix found in database for IP {ip_address}")
+    return False
 
 
-        with open(IP2LOCATION_DB_PATH, 'r') as csvfile:
-            reader = csv.reader(csvfile)
-            for row in reader:
-                try:
-                    ip_from = int(row[0])
-                    ip_to = int(row[1])
-                    country_code = row[2]
+def load_ip_country_asn_data(db_path):
+     """
+     加载 IPinfo 的国家和 ASN 数据。
+     """
+     ip_country_asn_data = []
 
-                    if ip_from <= ip_num <= ip_to:
-                        print(f"IP {ip_address} found in range {ip_from} - {ip_to}, country code: {country_code}")
-                        return country_code == "CN" # CN 是中国的 ISO 国家代码
+     try:
+         with gzip.open(db_path, 'rt', encoding='utf-8') as csvfile:  # 使用 gzip 打开 .gz 文件
+             reader = csv.DictReader(csvfile, fieldnames=["ip_prefix", "country_code", "asn", "organization"])
 
-                except ValueError:
-                   continue # 忽略格式错误的行
+             next(reader) # 跳过标题行
 
-        print(f"IP {ip_address} not found in IP2Location database.")
-        return False
+             for row in reader:
+                 ip_country_asn_data.append({
+                     "ip_prefix": row["ip_prefix"],
+                     "country_code": row["country_code"],
+                     "asn": row["asn"],
+                     "organization": row["organization"]
+                 })
+     except FileNotFoundError:
+         print(f"Error: Database file '{db_path}' not found.")
+         return None
+     except Exception as e:
+         print(f"Error loading data from '{db_path}': {e}")
+         return None
 
-    except Exception as e:
-        print(f"Error looking up IP {ip_address}: {e}")
-        return False
+     return ip_country_asn_data
 
 
 def main():
+    start_time = datetime.datetime.now()
+    print(f"Script started at {start_time}")
+
+    # 加载数据库
+    print("Loading IP database...")
+    ip_country_asn_data = load_ip_country_asn_data(IPINFO_DB_PATH)
+    if ip_country_asn_data is None:
+        print("Failed to load IP database. Exiting.")
+        return
+
     all_china_ips = []
     for as_number in AS_NUMBERS:
         print(f"Fetching IPs for {as_number}...")
-        ips = get_as_ips(as_number)
-        print(f"Found {len(ips)} IPs for {as_number}.")
+        ips = get_as_ips_from_db(as_number, ip_country_asn_data)
+        print(f"Found {len(ips)} IP Prefixes for {as_number}.")
 
-        china_ips = [ip for ip in ips if is_china_ip(ip)]
+        #  展开 CIDR 前缀并检查 IP 地址
+        china_ips = []
+        for prefix in ips:
+             try:
+                network = ipaddress.ip_network(prefix, strict=False) # strict=False 处理一些边界情况
+                for ip_int in range(int(network.network_address), int(network.broadcast_address) + 1): # 遍历网段中的所有IP
+                    ip_address = str(ipaddress.ip_address(ip_int))
+                    if is_china_ip(ip_address, ip_country_asn_data):
+                        china_ips.append(ip_address)
+             except ValueError as e:
+                 print(f"Error processing IP Prefix {prefix}: {e}")
+                 continue
+
         print(f"Found {len(china_ips)} China IPs for {as_number}.")
         all_china_ips.extend(china_ips)
+
 
     # Remove duplicates and sort
     unique_china_ips = sorted(list(set(all_china_ips)))
@@ -86,8 +116,8 @@ def main():
         f.write("\n".join(unique_china_ips))
 
     print(f"Wrote {len(unique_china_ips)} unique China IPs to {OUTPUT_FILE}")
-    print(f"Script finished at {datetime.datetime.now()}")
-
+    end_time = datetime.datetime.now()
+    print(f"Script finished at {end_time}, total runtime {end_time - start_time}")
 
 if __name__ == "__main__":
     main()
