@@ -8,31 +8,10 @@ AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
 IPINFO_DB_PATH = "country_asn.csv.gz"
 
-def get_as_ips_from_db(as_number, ip_country_asn_data):
-    """
-    从 IPinfo 数据库中查找指定 AS 编号的所有 IPv4 地址范围。
-    忽略 IPv6 地址。
-    """
-    as_ips = []
-    for record in ip_country_asn_data:
-        try:
-            ipaddress.ip_network(record["ip_prefix"]) #判断是否为合法的IP地址
-        except ValueError as e:
-            # 忽略不合法的IP地址
-            #print(f"Invalid IP address {record['start_ip']}, skipping")
-            continue
-
-
-        if record["asn"] == as_number and ":" not in record["ip_prefix"]:
-            as_ips.append(record["ip_prefix"])
-    return as_ips
-
-
-
 def load_china_ipv4_ranges(db_path):
     """
     加载 IPinfo 数据库中所有中国的 IPv4 地址范围。
-    忽略 IPv6 地址。
+    忽略 IPv6 地址和不合法的IP地址
     """
     ip_country_asn_data = []
 
@@ -44,24 +23,12 @@ def load_china_ipv4_ranges(db_path):
 
             for row in reader:
                 # 忽略IPv6地址
-
-                if ":" in row["ip_prefix"]:
-                   # print(f"Invalid IPv6 Address, Discard {row['ip_prefix']}")
+                if ":" in row["ip_prefix"] or row["country"] != "CN":
                     continue
 
                 try:
                    ipaddress.ip_network(row["ip_prefix"])
-                except Exception as e:
-                   print(f"Discarding Invalide IPAddress {row['ip_prefix']}")
-                   continue
-
-                #row["start_ip"], row["mask"] = row["network"].split('/')
-                # 必须要为中国
-                if row["country"] != "CN":
-                     continue
-
-                try:
-                  ip_country_asn_data.append({
+                   ip_country_asn_data.append({
                        "ip_prefix": row["ip_prefix"],
                        "country": row["country"],
                        "asn": row["asn"]
@@ -70,14 +37,26 @@ def load_china_ipv4_ranges(db_path):
                     print(f"Invalid IP Address: {row['ip_prefix']} {row['country']} 跳过")
                     continue
 
+
     except FileNotFoundError:
         print(f"Error: Database file '{db_path}' not found.")
         return None
     except Exception as e:
         print(f"Error loading data from '{db_path}': {e}")
         return None
-
+    print(f"Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
     return ip_country_asn_data
+
+
+def get_as_ips_from_db(as_number, ip_country_asn_data):
+    """
+    从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址范围。
+    """
+    as_ips = []
+    for record in ip_country_asn_data:
+        if record["asn"] == as_number:
+            as_ips.append(record["ip_prefix"]) # 直接返回 ip_prefix
+    return as_ips
 
 
 def main():
@@ -97,8 +76,8 @@ def main():
         ips = get_as_ips_from_db(as_number, china_ipv4_ranges)
         print(f"Found {len(ips)} IP Prefixes for AS {as_number}.")
 
-        # 筛选符合要求的 China IPs
-        china_ips = [ip for ip in ips] #IP地址 列表
+        # 直接将ip 组地址添加进去
+        china_ips = [ip for ip in ips]
 
         print(f"Found {len(china_ips)} China IPs for AS {as_number}.")
         all_china_ips.extend(china_ips)
