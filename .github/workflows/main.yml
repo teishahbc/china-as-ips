@@ -9,7 +9,7 @@ on:
         description: 'Reason for manual trigger'
         required: false
         default: 'Manual trigger'
-  push:  # 每次 push 到 main 分支时触发
+  push:
     branches:
       - main
 
@@ -33,6 +33,8 @@ jobs:
 
       - name: Download IPinfo database
         run: |
+          # 删除旧的数据库文件
+          rm -f country_asn.csv.gz
           # 使用 GitHub Secret 安全地下载 IPinfo 数据库
           wget "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_TOKEN }}" -O country_asn.csv.gz
 
