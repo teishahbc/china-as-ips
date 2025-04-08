@@ -1,114 +1,85 @@
+import requests
 import datetime
+import time
 import ipaddress
-import csv
+import geoip2.database
 import os
-import gzip
+import csv  # 导入csv 模块
+import gzip # 导入 gzip 模块
 
 AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
-IPINFO_DB_PATH = "country_asn.csv.gz"
+COUNTRY_ASN_FILE = "country_asn.csv.gz"  # 修改为 CSV 文件名
+MAX_RETRIES = 3
+RETRY_DELAY = 5
 
-def load_china_ipv4_ranges(db_path):
+def ip_range_to_cidr(start_ip, end_ip):
     """
-    加载 IPinfo 数据库中所有中国的 IPv4 地址范围。
-    忽略 IPv6 地址和不合法的IP地址
+    将 IP 地址范围转换为 CIDR 格式。
     """
-    ip_country_asn_data = []
-    discarded_ipv6 = 0
-    discarded_invalid_ip = 0
+    start = int(ipaddress.ip_address(start_ip))
+    end = int(ipaddress.ip_address(end_ip))
 
+    cidrs = []
+    while start <= end:
+        # 计算最大的可以合并的 prefixlen
+        prefixlen = 32
+        while prefixlen > 0:
+            try:
+                network = ipaddress.ip_network((start, prefixlen), strict=False)
+                if int(network.network_address) != start or int(network.broadcast_address) > end:
+                    prefixlen -= 1
+                    break
+                else:
+                    break
+            except ValueError:
+                prefixlen -= 1
+                break
+        cidrs.append(str(ipaddress.ip_network((start, prefixlen), strict=False)))
+        start += 2 ** (32 - prefixlen)
+    return cidrs
+
+
+def get_china_ips_from_csv(csv_file):
+    """
+    从 CSV 文件中读取 IP 地址范围，并转换为 CIDR 格式。
+    """
+    china_ips = []
     try:
-        with gzip.open(db_path, 'rt', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile, fieldnames=["start_ip", "end_ip", "country", "country_name", "continent", "continent_code", "asn", "as_name", "as_domain"])
-
-            next(reader)  # 跳过标题行
-            valid_record_count = 0  # 计数器
-
+        with gzip.open(csv_file, 'rt', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader, None)  # Skip header row
             for row in reader:
-                # 忽略IPv6地址
-                if ":" in row["start_ip"] or ":" in row["end_ip"]:
-                    discarded_ipv6 = discarded_ipv6 + 1
+                if len(row) < 3:
                     continue
-
-
-                #  必须是中国的IP地址
-                if row["country"] != "CN":
-                    continue
-
-                try:
-                    #ipaddress.ip_network(row["ip_prefix"]) 需要更改一下验证
-                    start_ip = row["start_ip"]
-                    end_ip = row["end_ip"]
-
-                    start_ip_num = int(ipaddress.ip_address(start_ip))
-                    end_ip_num = int(ipaddress.ip_address(end_ip))
-
-                    ip_country_asn_data.append({
-                        "start_ip": row["start_ip"],
-                        "end_ip":row["end_ip"],
-                        "country": row["country"],
-                        "asn": row["asn"]
-                    })
-                    valid_record_count += 1
-                    if valid_record_count <=5 : #打印前5条
-                        print(f"load_china_ipv4_ranges valid CN IPV4, start_ip:{row['start_ip']}, end_ip:{row['end_ip']}, country:{row['country']}, asn:{row['asn']}")
-
-                except ValueError as e:
-                    print(f"Invalid IP Address: {row['start_ip']} to {row['end_ip']}  , country:{row['country']} 跳过")
-                    discarded_invalid_ip = discarded_invalid_ip + 1
-                    continue
-
-
-
-    except FileNotFoundError:
-        print(f"Error: Database file '{db_path}' not found.")
-        return None
+                start_ip, end_ip, country = row[0], row[1], row[2]
+                if country == "CN":
+                    #Convert to CIDR
+                    cidrs = ip_range_to_cidr(start_ip, end_ip)
+                    china_ips.extend(cidrs)
     except Exception as e:
-        print(f"Error loading data from '{db_path}': {e}")
-        return None
+        print(f"Error reading CSV file: {e}")
+    return china_ips
 
-    print(f"load_china_ipv4_ranges: Discarded  china_ipv4_ranges data with  IPV6 {discarded_ipv6}")
-    print(f"load_china_ipv4_ranges: Discarded invalid record due to decode error {discarded_invalid_ip}")
-    print(f"Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
-    return ip_country_asn_data
-
-
-def get_as_ips_from_db(as_number, ip_country_asn_data):
-    """
-    从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址。
-    """
-    as_ips = []
-    print(f"get_as_ips_from_db: Searching for AS: {as_number}")  # Debug: 打印要搜索的 AS 编号
-    for record in ip_country_asn_data:
-        if record["asn"] == as_number:
-            print(f"get_as_ips_from_db, Found matching record: {record['start_ip']} to {record['end_ip']}")  # Debug: 打印匹配的记录
-            as_ips.append(record["start_ip"] + ',' + record["end_ip"])
-    print(f"get_as_ips_from_db: Returning IP prefixes: {as_ips}")  # Debug: 打印找到的IP前缀
-    return as_ips
 
 
 def main():
-    start_time = datetime.datetime.now()
-    print(f"Script started at {start_time}")
-
-    # 加载数据库
-    print("Loading IP database...")
-    ip_country_asn_data = load_china_ipv4_ranges(IPINFO_DB_PATH)
-    if ip_country_asn_data is None:
-        print("Failed to load IP database. Exiting.")
-        return
-
     all_china_ips = []
-    for as_number in AS_NUMBERS:
-        print(f"Fetching IPs for AS {as_number}...")
-        ips = get_as_ips_from_db(as_number, ip_country_asn_data)
-        print(f"Found {len(ips)} IP Prefixes for AS {as_number}.")
 
-        # 直接将ip 组地址添加进去
-        china_ips = [ip for ip in ips]
+    # 直接从 CSV 文件中获取中国 IP 地址
+    print(f"Fetching China IPs from {COUNTRY_ASN_FILE}...")
+    china_ips = get_china_ips_from_csv(COUNTRY_ASN_FILE)
+    print(f"Found {len(china_ips)} China IPs.")
+    all_china_ips.extend(china_ips)
 
-        print(f"Found {len(china_ips)} China IPs for AS {as_number}.")
-        all_china_ips.extend(china_ips)
+
+    # Filter IPs by AS numbers (如果需要，可以添加AS 过滤，但这可能和直接使用 CSV 文件冲突)
+    # filtered_china_ips = []
+    # for ip in all_china_ips:
+    #     if is_ip_in_as(ip, AS_NUMBERS):
+    #         filtered_china_ips.append(ip)
+    # all_china_ips = filtered_china_ips
+
 
     # Remove duplicates and sort
     unique_china_ips = sorted(list(set(all_china_ips)))
@@ -118,8 +89,7 @@ def main():
         f.write("\n".join(unique_china_ips))
 
     print(f"Wrote {len(unique_china_ips)} unique China IPs to {OUTPUT_FILE}")
-    end_time = datetime.datetime.now()
-    print(f"Script finished at {end_time}, total runtime {end_time - start_time}")
+    print(f"Script finished at {datetime.datetime.now()}")
 
 
 if __name__ == "__main__":
