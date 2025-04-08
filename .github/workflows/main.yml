@@ -2,22 +2,19 @@ name: Update China IPs
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天 UTC 00:00 (北京时间早上 8:00) 运行
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       reason:
         description: 'Reason for manual trigger'
         required: false
         default: 'Manual trigger'
-  push:
-    branches:
-      - main
 
 jobs:
   update-ips:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 授予写入仓库内容的权限
+      contents: write
     steps:
       - uses: actions/checkout@v3
 
@@ -29,30 +26,28 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ipaddress  # 安装 ipaddress 库
+          pip install requests
+          pip install ipaddress
+          pip install geoip2
 
-      - name: Download IPinfo database
+      - name: Download IPinfo database and verify size
         run: |
-          # 删除旧的数据库文件
           rm -f country_asn.csv.gz
-          # 使用 GitHub Secret 安全地下载 IPinfo 数据库
           wget -q "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_TOKEN }}" -O country_asn.csv.gz
-
-      - name: Show file content
-        run: |
-          echo "==========File Content=========="
-          head -n 20 country_asn.csv.gz | gunzip
-          echo "==========End File Content=========="
+          FILE_SIZE=$(stat -c %s country_asn.csv.gz)
+          MIN_SIZE=100000  # 假设最小文件大小为 100KB，根据实际情况调整
+          if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "Downloaded file is too small (size: $FILE_SIZE bytes).  It may be incomplete. Aborting."
+            exit 1
+          fi
 
       - name: Run script
         run: python main.py
-        env:
-          DEBUG: true  # 设置环境变量，可以在python中读取
 
       - name: Commit and push changes
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add china_ips.txt country_asn.csv.gz # 增加数据库文件的提交
+          git add china_ips.txt
           git commit -m "Update China IPs" || echo "No changes to commit"
           git push origin main
