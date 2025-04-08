@@ -8,52 +8,12 @@ AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
 IPINFO_DB_PATH = "country_asn.csv.gz"
 
-def get_as_ips_from_db(as_number, ip_country_asn_data):
+def load_china_ipv4_ranges(db_path):
     """
-    从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址。
+    加载 IPinfo 数据库中所有中国的 IPv4 地址范围。
+    忽略 IPv6 地址和不合法的IP地址
     """
-    print(f"get_as_ips_from_db, as_number: {as_number}")
-    as_ips = []
-    for record in ip_country_asn_data:
-        if record["asn"] == as_number:
-            as_ips.append((record["start_ip"], record["end_ip"]))
-    print(f"get_as_ips_from_db, as_ips: {as_ips}")
-    return as_ips
-
-
-def is_china_ip_range(start_ip, end_ip, ip_country_asn_data):
-    """
-    判断整个 IP 地址范围是否属于中国大陆。
-    如果整个IP段都在CN, 返回True， 否则返回 False
-    """
-
-    start_ip_num = int(ipaddress.ip_address(start_ip))
-    end_ip_num = int(ipaddress.ip_address(end_ip))
-    print(f"is_china_ip_range, start_ip_num: {start_ip_num}, end_ip_num: {end_ip_num}")
-    for record in ip_country_asn_data:
-        try:
-            record_start_ip_num = int(ipaddress.ip_address(record["start_ip"]))
-            record_end_ip_num = int(ipaddress.ip_address(record["end_ip"]))
-
-            if start_ip_num >= record_start_ip_num and end_ip_num <= record_end_ip_num :
-                print(f"is_china_ip_range, country: {record['country']}")
-                return record["country"] == "CN"  # CN 是中国的 ISO 国家代码
-            else:
-              continue # 忽略格式错误的行
-
-        except ValueError:
-            print(f"Invalid IP Range: {record['start_ip']} - {record['end_ip']}")
-            continue
-
-    return False
-
-
-
-def load_ip_country_asn_data(db_path):
-    """
-    加载 IPinfo 的国家和 ASN 数据。
-    """
-    ip_country_asn_data = []
+    china_ipv4_ranges = []
 
     try:
         with gzip.open(db_path, 'rt', encoding='utf-8') as csvfile:
@@ -62,20 +22,50 @@ def load_ip_country_asn_data(db_path):
             next(reader)  # 跳过标题行
 
             for row in reader:
-                ip_country_asn_data.append({
-                    "start_ip": row["start_ip"],
-                    "end_ip": row["end_ip"],
-                    "country": row["country"],
-                    "asn": row["asn"],
-                })
+                # 忽略IPv6地址
+                if ":" in row["start_ip"] or ":" in row["end_ip"]:
+                    continue
+                #  必须是中国的IP地址
+                if row["country"] != "CN":
+                    continue
+
+                try:
+                    start_ip = row["start_ip"]
+                    end_ip = row["end_ip"]
+                    asn = row["asn"]
+
+                    start_ip_num = int(ipaddress.ip_address(start_ip))
+                    end_ip_num = int(ipaddress.ip_address(end_ip))
+                    china_ipv4_ranges.append({
+                        "start_ip": start_ip,
+                        "end_ip": end_ip,
+                        "asn": asn,
+                    })
+                except ValueError as e:
+                    print(f"Invalid IP Address: {row['start_ip']} {row['end_ip']}")
+                    continue
+
+
+
     except FileNotFoundError:
         print(f"Error: Database file '{db_path}' not found.")
         return None
     except Exception as e:
         print(f"Error loading data from '{db_path}': {e}")
         return None
+    print(f"Loaded {len(china_ipv4_ranges)} china_ipv4_ranges data")
+    return china_ipv4_ranges
 
-    return ip_country_asn_data
+
+def get_china_ips_for_as(as_number, china_ipv4_ranges):
+    """
+    从中国的 IPv4 地址范围中，筛选出属于指定 AS 编号的 IP 地址范围。
+    """
+    as_ips = []
+    for record in china_ipv4_ranges:
+        if record["asn"] == as_number:
+            as_ips.append((record["start_ip"], record["end_ip"]))  # 存储 (start_ip, end_ip) 元组
+    return as_ips
 
 
 def main():
@@ -84,26 +74,25 @@ def main():
 
     # 加载数据库
     print("Loading IP database...")
-    ip_country_asn_data = load_ip_country_asn_data(IPINFO_DB_PATH)
-    if ip_country_asn_data is None:
+    china_ipv4_ranges = load_china_ipv4_ranges(IPINFO_DB_PATH)
+    if china_ipv4_ranges is None:
         print("Failed to load IP database. Exiting.")
         return
-
-    #测试: 打印前10条ip_country_asn_data
-    print("First 10 records:", ip_country_asn_data[:10])
 
     all_china_ips = []
     for as_number in AS_NUMBERS:
         print(f"Fetching IPs for AS {as_number}...")
-        ips = get_as_ips_from_db(as_number, ip_country_asn_data)
+        ips = get_china_ips_for_as(as_number, china_ipv4_ranges)
         print(f"Found {len(ips)} IP Ranges for AS {as_number}.")
 
-        # 判断整个IP段是否属于CN
         china_ips = []
         for start_ip, end_ip in ips:
-            if is_china_ip_range(start_ip, end_ip, ip_country_asn_data):
-                 network = ipaddress.ip_network(start_ip+'/'+'24', strict=False)
-                 china_ips.append(str(network.network_address))  # 只添加网段起始IP
+           try:
+             network = ipaddress.ip_network(start_ip + '/' + '24', strict=False)  # 创建网络对象
+             china_ips.append(str(network.network_address))  # 获取网络地址并添加到列表
+           except ValueError as e:
+               print(f"error ipaddress.ip_network: {e}")
+               continue
 
         print(f"Found {len(china_ips)} China IPs for AS {as_number}.")
         all_china_ips.extend(china_ips)
@@ -121,21 +110,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # 测试数据
-   # test_data = [
-   #             {"start_ip": "1.2.3.0", "end_ip": "1.2.3.255", "country": "CN", "asn": "AS4134"},
-   #             {"start_ip": "4.5.6.0", "end_ip": "4.5.6.255", "country": "US", "asn": "AS701"},
-   #         ]
-    #使用测试数据来测试get_as_ips_from_db 函数的输出
-   # ips = get_as_ips_from_db("AS4134", test_data)
-   # print(f"Test data  get_as_ips_from_db : {ips}")
-    #  在测试is_china_ip_range函数前，添加ip_country_asn_data
-   # china_ips = []
-   # for start_ip, end_ip in ips:
-   #     print(f"test range: {start_ip}, {end_ip}")
-   #     if is_china_ip_range(start_ip, end_ip, test_data):
-   #         network = ipaddress.ip_network(start_ip + '/' + '24', strict=False)
-   #         china_ips.append(str(network.network_address))  # 只添加网段起始IP
-   # print(china_ips)
-
     main()
