@@ -16,8 +16,12 @@ def ip_range_to_cidr(start_ip, end_ip):
     """
     将 IP 地址范围转换为 CIDR 格式（优化版本）。
     """
-    start = int(ipaddress.ip_address(start_ip))
-    end = int(ipaddress.ip_address(end_ip))
+    try:
+        start = int(ipaddress.ip_address(start_ip))
+        end = int(ipaddress.ip_address(end_ip))
+    except ValueError as e:
+        print(f"Invalid IP address format: {e}")
+        return []
 
     cidrs = []
     while end >= start:
@@ -28,12 +32,18 @@ def ip_range_to_cidr(start_ip, end_ip):
             if new_start >= end:
                 break
             max_prefixlen += 1
-        network = ipaddress.ip_network((start, 32 - max_prefixlen), strict=False)
-        cidrs.append(str(network))
-        start += (1 << (32 - (32 - max_prefixlen)))
+        try:
+            network = ipaddress.ip_network((start, 32 - max_prefixlen), strict=False)
+            cidrs.append(str(network))
+            start += (1 << (32 - (32 - max_prefixlen)))
+        except ValueError as e:
+            print(f"Error creating network: {e}")
+            break
     return cidrs
 
 def is_valid_asn(as_number:str, asns:list[str]) ->bool:
+    if not as_number:
+        return False
     for asn in asns:
         if asn in as_number:
             return True
@@ -76,8 +86,9 @@ def main():
     unique_china_ips = sorted(list(set(all_china_ips)))
 
     # Write to file
-    with open(OUTPUT_FILE, "w") as f:
-        f.write("\n".join(unique_china_ips))
+    if unique_china_ips: #只有当列表不为空时，才写入文件，防止文件内容没有改变
+        with open(OUTPUT_FILE, "w") as f:
+            f.write("\n".join(unique_china_ips))
 
     print(f"Wrote {len(unique_china_ips)} unique China IPs to {OUTPUT_FILE}")
     print(f"Script finished at {datetime.datetime.now()}")
