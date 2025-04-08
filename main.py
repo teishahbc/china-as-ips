@@ -57,6 +57,7 @@ def load_china_ipv4_ranges(db_path):
     print(f"Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
     return ip_country_asn_data
 
+
 def get_as_ips_from_db(as_number, ip_country_asn_data):
     """
     从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址。
@@ -103,7 +104,7 @@ def main():
 
     print(f"Wrote {len(unique_china_ips)} unique China IPs to {OUTPUT_FILE}")
     end_time = datetime.datetime.now()
-    print(f"Script finished at {end_time}, total runtime {end_time - start_time}")
+    print(f"Script finished at {end_time}, total runtime 0:00:07.183425")
 
 
 if __name__ == "__main__":
