@@ -14,6 +14,8 @@ def load_china_ipv4_ranges(db_path):
     忽略 IPv6 地址和不合法的IP地址
     """
     ip_country_asn_data = []
+    discarded_ipv6 = 0
+    discarded_invalid_ip = 0
 
     try:
         with gzip.open(db_path, 'rt', encoding='utf-8') as csvfile:
@@ -25,7 +27,11 @@ def load_china_ipv4_ranges(db_path):
             for row in reader:
                 # 忽略IPv6地址
                 if ":" in row["ip_prefix"]:
+                    discarded_ipv6 = discarded_ipv6 + 1
+                    #print(f"load_china_ipv4_ranges, discards Invalid IPv6 Address, Discard ip_prefix: {row['ip_prefix']}, country:{row['country']}, asn:{row['asn']}")
                     continue
+
+
                 #  必须是中国的IP地址
                 if row["country"] != "CN":
                     continue
@@ -43,6 +49,7 @@ def load_china_ipv4_ranges(db_path):
 
                 except ValueError as e:
                     print(f"Invalid IP Address: {row['ip_prefix']} {row['country']} 跳过")
+                    discarded_invalid_ip = discarded_invalid_ip + 1
                     continue
 
 
@@ -54,6 +61,8 @@ def load_china_ipv4_ranges(db_path):
         print(f"Error loading data from '{db_path}': {e}")
         return None
 
+    print(f"load_china_ipv4_ranges: Discarded  china_ipv4_ranges data with  IPV6 {discarded_ipv6}")
+    print(f"load_china_ipv4_ranges: Discarded invalid record due to decode error {discarded_invalid_ip}")
     print(f"Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
     return ip_country_asn_data
 
@@ -104,7 +113,7 @@ def main():
 
     print(f"Wrote {len(unique_china_ips)} unique China IPs to {OUTPUT_FILE}")
     end_time = datetime.datetime.now()
-    print(f"Script finished at {end_time}, total runtime 0:00:07.183425")
+    print(f"Script finished at {end_time}, total runtime {end_time - start_time}")
 
 
 if __name__ == "__main__":
