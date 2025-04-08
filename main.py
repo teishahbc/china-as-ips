@@ -3,7 +3,6 @@ import ipaddress
 import csv
 import os
 import gzip
-import bisect
 
 AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
@@ -16,7 +15,7 @@ def get_as_ips_from_db(as_number, ip_country_asn_data):
     as_ips = []
     for record in ip_country_asn_data:
         if record["asn"] == as_number:
-            as_ips.append(record["start_ip"] + '-' + record["end_ip"]) #  返回 "start_ip-end_ip" 格式
+            as_ips.append((record["start_ip"], record["end_ip"]))
     return as_ips
 
 
@@ -117,4 +116,21 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # 测试数据
+    test_data = [
+                {"start_ip": "1.2.3.0", "end_ip": "1.2.3.255", "country": "CN", "asn": "AS4134"},
+                {"start_ip": "4.5.6.0", "end_ip": "4.5.6.255", "country": "US", "asn": "AS701"},
+            ]
+    #使用测试数据来测试get_as_ips_from_db 函数的输出
+    ips = get_as_ips_from_db("AS4134", test_data)
+    print(f"Test data  get_as_ips_from_db : {ips}")
+    #  在测试is_china_ip_range函数前，添加ip_country_asn_data
+    china_ips = []
+    for start_ip, end_ip in ips:
+        print(f"test range: {start_ip}, {end_ip}")
+        if is_china_ip_range(start_ip, end_ip, test_data):
+            network = ipaddress.ip_network(start_ip + '/' + '24', strict=False)
+            china_ips.append(str(network.network_address))  # 只添加网段起始IP
+    print(china_ips)
+
+    #main()
