@@ -22,23 +22,18 @@ def ip_range_to_cidr(start_ip, end_ip):
     except ValueError as e:
         print(f"Invalid IP address format: {e}")
         return []
+    if start > end:
+        print(f"start_ip > end_ip")
+        return []
 
     cidrs = []
-    while end >= start:
-        # 计算最大的可以合并的 prefixlen
-        max_prefixlen = 0
-        while True:
-            new_start = start | ((1 << (32 - max_prefixlen - 1)) - 1)
-            if new_start >= end:
-                break
-            max_prefixlen += 1
-        try:
-            network = ipaddress.ip_network((start, 32 - max_prefixlen), strict=False)
-            cidrs.append(str(network))
-            start += (1 << (32 - (32 - max_prefixlen)))
-        except ValueError as e:
-            print(f"Error creating network: {e}")
-            break
+    try:
+        network = ipaddress.summarize_address_range(ipaddress.ip_address(start_ip),ipaddress.ip_address(end_ip))
+        for n in network:
+            cidrs.append(str(n))
+    except ValueError as e:
+        print(f"Error creating network: {e}")
+
     return cidrs
 
 def is_valid_asn(as_number:str, asns:list[str]) ->bool:
