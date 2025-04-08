@@ -12,10 +12,12 @@ def get_as_ips_from_db(as_number, ip_country_asn_data):
     """
     从 IPinfo 数据库中查找指定 AS 编号的所有 IP 地址。
     """
+    print(f"get_as_ips_from_db, as_number: {as_number}")
     as_ips = []
     for record in ip_country_asn_data:
         if record["asn"] == as_number:
             as_ips.append((record["start_ip"], record["end_ip"]))
+    print(f"get_as_ips_from_db, as_ips: {as_ips}")
     return as_ips
 
 
@@ -27,15 +29,15 @@ def is_china_ip_range(start_ip, end_ip, ip_country_asn_data):
 
     start_ip_num = int(ipaddress.ip_address(start_ip))
     end_ip_num = int(ipaddress.ip_address(end_ip))
-
+    print(f"is_china_ip_range, start_ip_num: {start_ip_num}, end_ip_num: {end_ip_num}")
     for record in ip_country_asn_data:
         try:
             record_start_ip_num = int(ipaddress.ip_address(record["start_ip"]))
             record_end_ip_num = int(ipaddress.ip_address(record["end_ip"]))
 
             if start_ip_num >= record_start_ip_num and end_ip_num <= record_end_ip_num :
-
-                 return record["country"] == "CN"  # CN 是中国的 ISO 国家代码
+                print(f"is_china_ip_range, country: {record['country']}")
+                return record["country"] == "CN"  # CN 是中国的 ISO 国家代码
             else:
               continue # 忽略格式错误的行
 
@@ -87,6 +89,9 @@ def main():
         print("Failed to load IP database. Exiting.")
         return
 
+    #测试: 打印前10条ip_country_asn_data
+    print("First 10 records:", ip_country_asn_data[:10])
+
     all_china_ips = []
     for as_number in AS_NUMBERS:
         print(f"Fetching IPs for AS {as_number}...")
@@ -117,20 +122,20 @@ def main():
 
 if __name__ == "__main__":
     # 测试数据
-    test_data = [
-                {"start_ip": "1.2.3.0", "end_ip": "1.2.3.255", "country": "CN", "asn": "AS4134"},
-                {"start_ip": "4.5.6.0", "end_ip": "4.5.6.255", "country": "US", "asn": "AS701"},
-            ]
+   # test_data = [
+   #             {"start_ip": "1.2.3.0", "end_ip": "1.2.3.255", "country": "CN", "asn": "AS4134"},
+   #             {"start_ip": "4.5.6.0", "end_ip": "4.5.6.255", "country": "US", "asn": "AS701"},
+   #         ]
     #使用测试数据来测试get_as_ips_from_db 函数的输出
-    ips = get_as_ips_from_db("AS4134", test_data)
-    print(f"Test data  get_as_ips_from_db : {ips}")
+   # ips = get_as_ips_from_db("AS4134", test_data)
+   # print(f"Test data  get_as_ips_from_db : {ips}")
     #  在测试is_china_ip_range函数前，添加ip_country_asn_data
-    china_ips = []
-    for start_ip, end_ip in ips:
-        print(f"test range: {start_ip}, {end_ip}")
-        if is_china_ip_range(start_ip, end_ip, test_data):
-            network = ipaddress.ip_network(start_ip + '/' + '24', strict=False)
-            china_ips.append(str(network.network_address))  # 只添加网段起始IP
-    print(china_ips)
+   # china_ips = []
+   # for start_ip, end_ip in ips:
+   #     print(f"test range: {start_ip}, {end_ip}")
+   #     if is_china_ip_range(start_ip, end_ip, test_data):
+   #         network = ipaddress.ip_network(start_ip + '/' + '24', strict=False)
+   #         china_ips.append(str(network.network_address))  # 只添加网段起始IP
+   # print(china_ips)
 
-    #main()
+    main()
