@@ -1,78 +1,55 @@
-import requests
 import datetime
-import time  # 引入 time 模块
+import time
+import ipaddress
+import geoip2.database
+import os
 
 AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
-MAX_RETRIES = 3  # 定义最大重试次数
-RETRY_DELAY = 5  # 定义重试间隔时间（秒）
+GEOIP2_DB_PATH = "GeoLite2-Country.mmdb"  # 数据库文件需要放在相同目录下
 
 def get_as_ips(as_number):
     """
-    从 ipinfo.io 获取指定 AS 的所有 IP 地址，带有重试机制。
+    获取指定 AS 的所有 IP 地址。
+    这个函数现在**必须**返回该AS的IP地址列表，否则后续流程会出错。
+    如果无法获取，应该记录错误并返回一个空列表。
+    **你需要替换这个函数的实现，使用其他数据源来获取 AS 的 IP 地址。**
     """
-    url = f"https://ipinfo.io/{as_number}/cidr"
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = requests.get(url)
-            response.raise_for_status()  # 抛出 HTTPError for bad responses (4xx or 5xx)
-            return response.text.strip().split("\n")
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching IPs for {as_number} (Attempt {attempt + 1}/{MAX_RETRIES}): {e}")
-            if attempt < MAX_RETRIES - 1:
-                print(f"Retrying in {RETRY_DELAY} seconds...")
-                time.sleep(RETRY_DELAY)  # 等待一段时间后重试
-            else:
-                print(f"Max retries reached for {as_number}. Giving up.")
-                return []
-    return []
+    #  示例： 占位符实现，你需要替换它
+    print(f"Fetching IPs for {as_number} - Placeholder implementation, replace with your data source!")
+    return [] # 返回一个空列表，你需要替换它
 
 def is_china_ip(ip_address):
     """
-    判断 IP 地址是否属于中国大陆。这里使用纯真 IP 库 (https://www.ipip.net/) 作为示例。
-    **注意：**
-    *  纯真 IP 库是商业服务，这里仅为演示目的。实际使用时，请确保你拥有相应的授权。
-    *  由于纯真 IP 库更新频率较高，你可能需要定期更新该库。
-    *  更推荐的方式是使用专门的 IP 地理位置查询服务（如 MaxMind GeoIP2、IP2Location 等），它们提供更准确和可靠的数据。
+    使用 MaxMind GeoIP2 数据库判断 IP 地址是否属于中国大陆。
     """
-    import ipaddress
-
     try:
-        ip = ipaddress.ip_address(ip_address)  # 检查是否为有效的 IP 地址
+        ip = ipaddress.ip_address(ip_address)
     except ValueError:
         print(f"Invalid IP address: {ip_address}")
         return False
 
     try:
-        # 注意：这里需要你自己的纯真 IP 库（qqwry.dat）。你需要自行下载并将其放在与 main.py 相同的目录下。
-        # 为了简化示例，这里注释掉了，你需要取消注释并替换成你自己的实现。
-        #
-        # from qqwry import QQwry
-        # q = QQwry()
-        # q.load_file('qqwry.dat') # 纯真 IP 数据库文件
-        # result = q.lookup(ip_address)
-        # if result and "中国" in result[0]:
-        #    return True
-        # else:
-        #    return False
+        # 检查数据库文件是否存在
+        if not os.path.exists(GEOIP2_DB_PATH):
+            print(f"GeoIP2 database file not found at {GEOIP2_DB_PATH}. Using placeholder China IP check.")
+            #  提供一个简化的占位符实现
+            #  请用更可靠和授权的方式来判断 IP 归属地
+            if ip.subnet_of(ipaddress.ip_network('101.0.0.0/8')):
+                return True
+            elif ip.subnet_of(ipaddress.ip_network('58.0.0.0/8')):
+                return True
+            else:
+                return False
 
-        #  由于无法直接提供 qqwry.dat 的下载和使用，这里提供一个简化的占位符实现
-        #  请用更可靠和授权的方式来判断 IP 归属地
-
-        # 占位符实现： 模拟判断一些常见网段
-        if ip.subnet_of(ipaddress.ip_network('101.0.0.0/8')):
-            return True
-        elif ip.subnet_of(ipaddress.ip_network('58.0.0.0/8')):
-            return True
-        else:
-            return False
-
-
-
+        with geoip2.database.Reader(GEOIP2_DB_PATH) as reader:
+            response = reader.country(ip_address)
+            country_code = response.country.iso_code
+            print(f"IP {ip_address} country code: {country_code}")  # 增加日志输出
+            return country_code == "CN"  # CN 是中国的 ISO 国家代码
     except Exception as e:
         print(f"Error looking up IP {ip_address}: {e}")
         return False
-
 
 def main():
     all_china_ips = []
