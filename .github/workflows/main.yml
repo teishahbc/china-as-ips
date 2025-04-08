@@ -13,6 +13,8 @@ on:
 jobs:
   update-ips:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 授予写入仓库内容的权
     steps:
       - uses: actions/checkout@v3
 
