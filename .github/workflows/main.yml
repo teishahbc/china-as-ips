@@ -9,6 +9,9 @@ on:
         description: 'Reason for manual trigger'
         required: false
         default: 'Manual trigger'
+  push:
+    branches:
+      - main  # 当 main 分支有 push 时触发
 
 jobs:
   update-ips:
