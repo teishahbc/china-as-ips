@@ -31,7 +31,7 @@ jobs:
       - name: Download IPinfo database
         run: |
           # 使用 GitHub Secret 安全地下载 IPinfo 数据库
-          wget "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_TOKEN }}" -O ipinfo-country-asn.csv.gz
+          wget "https://ipinfo.io/data/free/country_asn.csv.gz?token=${{ secrets.IPINFO_TOKEN }}" -O country_asn.csv.gz
 
       - name: Run script
         run: python main.py
@@ -40,6 +40,6 @@ jobs:
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add china_ips.txt ipinfo-country-asn.csv.gz # 增加数据库文件的提交
+          git add china_ips.txt country_asn.csv.gz # 增加数据库文件的提交
           git commit -m "Update China IPs" || echo "No changes to commit" # 防止没有修改时 commit 失败
           git push origin main
