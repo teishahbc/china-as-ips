@@ -2,7 +2,6 @@ import requests
 import datetime
 import time
 import ipaddress
-import geoip2.database
 import os
 import csv  # 导入csv 模块
 import gzip # 导入 gzip 模块
@@ -39,6 +38,11 @@ def ip_range_to_cidr(start_ip, end_ip):
         start += 2 ** (32 - prefixlen)
     return cidrs
 
+def is_valid_asn(as_number:str, asns:list[str]) ->bool:
+    for asn in asns:
+        if asn in as_number:
+            return True
+    return False
 
 def get_china_ips_from_csv(csv_file):
     """
@@ -50,17 +54,17 @@ def get_china_ips_from_csv(csv_file):
             reader = csv.reader(f)
             next(reader, None)  # Skip header row
             for row in reader:
-                if len(row) < 3:
+                if len(row) < 7:
                     continue
-                start_ip, end_ip, country = row[0], row[1], row[2]
-                if country == "CN":
+                start_ip, end_ip, country,_,_,_,asn = row[0], row[1], row[2],row[3],row[4],row[5],row[6]
+
+                if country == "CN" and is_valid_asn(asn,AS_NUMBERS):
                     #Convert to CIDR
                     cidrs = ip_range_to_cidr(start_ip, end_ip)
                     china_ips.extend(cidrs)
     except Exception as e:
         print(f"Error reading CSV file: {e}")
     return china_ips
-
 
 
 def main():
@@ -71,14 +75,6 @@ def main():
     china_ips = get_china_ips_from_csv(COUNTRY_ASN_FILE)
     print(f"Found {len(china_ips)} China IPs.")
     all_china_ips.extend(china_ips)
-
-
-    # Filter IPs by AS numbers (如果需要，可以添加AS 过滤，但这可能和直接使用 CSV 文件冲突)
-    # filtered_china_ips = []
-    # for ip in all_china_ips:
-    #     if is_ip_in_as(ip, AS_NUMBERS):
-    #         filtered_china_ips.append(ip)
-    # all_china_ips = filtered_china_ips
 
 
     # Remove duplicates and sort
