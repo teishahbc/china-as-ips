@@ -23,12 +23,15 @@ def load_china_ipv4_ranges(db_path):
 
             next(reader)  # 跳过标题行
             valid_record_count = 0  # 计数器
+            row_count = 0 # 行数记录
 
             for row in reader:
+                row_count = row_count + 1
+                if row_count <= 10:
+                    print(f"load_china_ipv4_ranges raw record {row}") # 打印原始数据
                 # 忽略IPv6地址
                 if ":" in row["ip_prefix"]:
                     discarded_ipv6 = discarded_ipv6 + 1
-                    #print(f"load_china_ipv4_ranges, discards Invalid IPv6 Address, Discard ip_prefix: {row['ip_prefix']}, country:{row['country']}, asn:{row['asn']}")
                     continue
 
 
@@ -63,7 +66,7 @@ def load_china_ipv4_ranges(db_path):
 
     print(f"load_china_ipv4_ranges: Discarded  china_ipv4_ranges data with  IPV6 {discarded_ipv6}")
     print(f"load_china_ipv4_ranges: Discarded invalid record due to decode error {discarded_invalid_ip}")
-    print(f"Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
+    print(f"load_china_ipv4_ranges: Loaded {len(ip_country_asn_data)} china_ipv4_ranges data")
     return ip_country_asn_data
 
 
