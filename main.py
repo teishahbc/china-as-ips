@@ -120,4 +120,6 @@ def main():
     print(f"Script finished at {end_time}, total runtime {end_time - start_time}")
 
 if __name__ == "__main__":
+   # test_get_as_ips_from_db()
+   # test_is_china_ip()
     main()
