@@ -1,21 +1,31 @@
 import requests
 import datetime
+import time  # 引入 time 模块
 
 AS_NUMBERS = ["AS4134", "AS4808", "AS4837", "AS9808", "AS4812"]
 OUTPUT_FILE = "china_ips.txt"
+MAX_RETRIES = 3  # 定义最大重试次数
+RETRY_DELAY = 5  # 定义重试间隔时间（秒）
 
 def get_as_ips(as_number):
     """
-    从 ipinfo.io 获取指定 AS 的所有 IP 地址。
+    从 ipinfo.io 获取指定 AS 的所有 IP 地址，带有重试机制。
     """
     url = f"https://ipinfo.io/{as_number}/cidr"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # 抛出 HTTPError for bad responses (4xx or 5xx)
-        return response.text.strip().split("\n")
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching IPs for {as_number}: {e}")
-        return []
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()  # 抛出 HTTPError for bad responses (4xx or 5xx)
+            return response.text.strip().split("\n")
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching IPs for {as_number} (Attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES - 1:
+                print(f"Retrying in {RETRY_DELAY} seconds...")
+                time.sleep(RETRY_DELAY)  # 等待一段时间后重试
+            else:
+                print(f"Max retries reached for {as_number}. Giving up.")
+                return []
+    return []
 
 def is_china_ip(ip_address):
     """
